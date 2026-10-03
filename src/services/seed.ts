@@ -41,7 +41,7 @@ interface SeedPayload {
 }
 
 const SEED_VERSION_KEY = "ranklist_seed_ver";
-const CURRENT_SEED_VERSION = "20261004_v2";
+const CURRENT_SEED_VERSION = "20261004_v4";
 
 export async function checkAndSeedDatabase(): Promise<boolean> {
   const db = await openDatabase();
@@ -111,10 +111,21 @@ export async function checkAndSeedDatabase(): Promise<boolean> {
         }
       });
     } else {
-      // Sync static photos metadata for existing databases
-      await withTransaction(["photos"], "readwrite", (tx) => {
+      // Sync static photos and cover photos for existing databases
+      await withTransaction(["photos", "items"], "readwrite", (tx) => {
         const photoStore = tx.objectStore("photos");
+        const itemStore = tx.objectStore("items");
+
         for (const item of seed.items) {
+          const itemReq = itemStore.get(item.id);
+          itemReq.onsuccess = () => {
+            const existingItem = itemReq.result;
+            if (existingItem) {
+              existingItem.coverPhotoId = item.coverPhotoId;
+              itemStore.put(existingItem);
+            }
+          };
+
           if (item.photos && Array.isArray(item.photos)) {
             for (const photo of item.photos) {
               if (photo.staticUrl) {

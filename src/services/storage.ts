@@ -8,7 +8,7 @@ export interface UploadProgress {
 }
 
 const objectUrlCache = new Map<number, string>();
-export const STATIC_ASSET_VERSION = "20261004v2";
+export const STATIC_ASSET_VERSION = "20261004v4";
 
 export function getPhotoDisplayUrl(photo: { id: number; blob?: Blob; staticUrl?: string }): string {
   if (photo.blob) {
