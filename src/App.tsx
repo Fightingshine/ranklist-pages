@@ -1,11 +1,16 @@
 import {
   type ChangeEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
   useEffect,
   useMemo,
   useRef,
   useState
 } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Database,
   Download,
   Film,
@@ -13,6 +18,8 @@ import {
   ImageIcon,
   LoaderCircle,
   Plus,
+  RefreshCw,
+  Save,
   Trash2,
   Upload,
   X
@@ -184,7 +191,7 @@ function moveItemToTierEnd(board: Board, itemId: number, targetTierId: number): 
   };
 }
 
-function itemCoverPhoto(item: Item): Photo | undefined {
+function coverPhotoForItem(item: Item): Photo | undefined {
   if (item.coverPhotoId) {
     const matched = item.photos.find((photo) => photo.id === item.coverPhotoId);
     if (matched) {
@@ -195,12 +202,23 @@ function itemCoverPhoto(item: Item): Photo | undefined {
   return item.photos[0];
 }
 
-function isImageMedia(media: Photo) {
+function isImage(media: Photo) {
   return media.mimeType.startsWith("image/");
 }
 
-function isVideoMedia(media: Photo) {
+function isVideo(media: Photo) {
   return media.mimeType.startsWith("video/");
+}
+
+function fileSizeLabel(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const kib = bytes / 1024;
+  if (kib < 1024) {
+    return `${kib.toFixed(1)} KB`;
+  }
+  return `${(kib / 1024).toFixed(1)} MB`;
 }
 
 type UploadStatus =
@@ -266,7 +284,6 @@ export default function App() {
   const [showBackupDrawer, setShowBackupDrawer] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupMsg, setBackupMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
 
   const selectedItem = useMemo(() => {
     if (!board || selectedItemId === null) {
@@ -428,45 +445,23 @@ export default function App() {
     }
   }
 
-  async function handleSaveTier(tierId: number, name: string) {
+  async function handleDeleteTier(tier: Tier) {
     if (!board) {
       return;
     }
 
-    const trimmed = name.trim();
-    if (!trimmed) {
+    if (!window.confirm(`确定要删除档位“${tier.name}”吗？档位里的所有项目也会被删除。`)) {
       return;
     }
 
     try {
       setError(null);
-      const updatedTier = await updateTier(tierId, { name: trimmed });
+      await deleteTier(tier.id);
       setBoard({
         ...board,
-        tiers: board.tiers.map((tier) => (tier.id === tierId ? { ...tier, name: updatedTier.name } : tier))
+        tiers: board.tiers.filter((currentTier) => currentTier.id !== tier.id)
       });
-    } catch (tierError) {
-      setError(tierError instanceof Error ? tierError.message : "修改档位失败。");
-    }
-  }
-
-  async function handleDeleteTier(tierId: number) {
-    if (!board) {
-      return;
-    }
-
-    if (!window.confirm("确定要删除这个档位吗？档位里的所有项目也会被删除。")) {
-      return;
-    }
-
-    try {
-      setError(null);
-      await deleteTier(tierId);
-      setBoard({
-        ...board,
-        tiers: board.tiers.filter((tier) => tier.id !== tierId)
-      });
-      if (selectedItem?.tierId === tierId) {
+      if (selectedItem?.tierId === tier.id) {
         setSelectedItemId(null);
       }
     } catch (tierError) {
@@ -495,86 +490,78 @@ export default function App() {
     }
   }
 
-  async function handleSaveItemDetails(name: string, description: string, coverPhotoId: number | null) {
-    if (!selectedItem || !board) {
+  async function handleSaveItemName(item: Item, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === item.name || !board) {
       return;
     }
 
     try {
       setError(null);
-      const updatedItem = await updateItem(selectedItem.id, {
-        name,
-        description,
-        coverPhotoId
-      });
+      const updatedItem = await updateItem(item.id, { name: trimmed });
       setBoard(replaceItem(board, updatedItem));
-    } catch (itemError) {
-      setError(itemError instanceof Error ? itemError.message : "保存项目详情失败。");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "保存项目名称失败。");
     }
   }
 
-  async function handleDeleteItem(itemId: number) {
+  async function handleSaveItemDescription(item: Item, description: string) {
+    const trimmed = description.trim();
+    if (trimmed === item.description || !board) {
+      return;
+    }
+
+    try {
+      setError(null);
+      const updatedItem = await updateItem(item.id, { description: trimmed });
+      setBoard(replaceItem(board, updatedItem));
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "保存项目描述失败。");
+    }
+  }
+
+  async function handleSetItemCover(item: Item, photo: Photo) {
     if (!board) {
       return;
     }
 
-    if (!window.confirm("确定要删除这个项目吗？")) {
+    try {
+      setError(null);
+      const updatedItem = await updateItem(item.id, { coverPhotoId: photo.id });
+      setBoard(replaceItem(board, updatedItem));
+    } catch (coverError) {
+      setError(coverError instanceof Error ? coverError.message : "设置封面失败。");
+    }
+  }
+
+  async function handleDeleteItem(item: Item) {
+    if (!board) {
+      return;
+    }
+
+    if (!window.confirm(`确定要删除“${item.name}”吗？`)) {
       return;
     }
 
     try {
       setError(null);
-      await deleteItem(itemId);
+      await deleteItem(item.id);
       setBoard({
         ...board,
         tiers: board.tiers.map((tier) => ({
           ...tier,
-          items: tier.items.filter((item) => item.id !== itemId)
+          items: tier.items.filter((currentItem) => currentItem.id !== item.id)
         }))
       });
-      if (selectedItemId === itemId) {
+      if (selectedItemId === item.id) {
         setSelectedItemId(null);
       }
-    } catch (itemError) {
-      setError(itemError instanceof Error ? itemError.message : "删除项目失败。");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除项目失败。");
     }
   }
 
-  async function handleTouchShift(itemId: number, direction: "prev" | "next") {
-    if (!board) {
-      return;
-    }
-
-    const optimisticBoard = shiftItemOrder(board, itemId, direction);
-    setBoard(optimisticBoard);
-
-    try {
-      setError(null);
-      await reorderItems(board.id, flattenItems(optimisticBoard));
-    } catch (reorderError) {
-      setBoard(board);
-      setError(reorderError instanceof Error ? reorderError.message : "重新排序失败。");
-    }
-  }
-
-  async function handleTouchChangeTier(itemId: number, targetTierId: number) {
-    if (!board) {
-      return;
-    }
-
-    const optimisticBoard = moveItemToTierEnd(board, itemId, targetTierId);
-    setBoard(optimisticBoard);
-
-    try {
-      setError(null);
-      await reorderItems(board.id, flattenItems(optimisticBoard));
-    } catch (reorderError) {
-      setBoard(board);
-      setError(reorderError instanceof Error ? reorderError.message : "修改档位失败。");
-    }
-  }
-
-  async function handleDrop(targetTierId: number, targetItemId?: number) {
+  async function handleMoveItem(targetTierId: number, targetItemId?: number) {
     if (!board || draggingItemId === null) {
       return;
     }
@@ -591,6 +578,40 @@ export default function App() {
     } catch (reorderError) {
       setBoard(board);
       setError(reorderError instanceof Error ? reorderError.message : "重新排序失败。");
+    }
+  }
+
+  async function handleMoveItemOrder(itemId: number, direction: "prev" | "next") {
+    if (!board) {
+      return;
+    }
+
+    const optimisticBoard = shiftItemOrder(board, itemId, direction);
+    setBoard(optimisticBoard);
+
+    try {
+      setError(null);
+      await reorderItems(board.id, flattenItems(optimisticBoard));
+    } catch (reorderError) {
+      setBoard(board);
+      setError(reorderError instanceof Error ? reorderError.message : "重新排序失败。");
+    }
+  }
+
+  async function handleMoveItemToTier(itemId: number, targetTierId: number) {
+    if (!board) {
+      return;
+    }
+
+    const optimisticBoard = moveItemToTierEnd(board, itemId, targetTierId);
+    setBoard(optimisticBoard);
+
+    try {
+      setError(null);
+      await reorderItems(board.id, flattenItems(optimisticBoard));
+    } catch (reorderError) {
+      setBoard(board);
+      setError(reorderError instanceof Error ? reorderError.message : "修改档位失败。");
     }
   }
 
@@ -633,19 +654,19 @@ export default function App() {
     }
   }
 
-  async function handleDeletePhoto(photoId: number) {
+  async function handleDeletePhoto(photo: Photo) {
     if (!selectedItem || !board) {
       return;
     }
 
-    if (!window.confirm("确定要删除这个媒体文件吗？")) {
+    if (!window.confirm(`确定要删除“${photo.originalName}”吗？`)) {
       return;
     }
 
     try {
       setError(null);
-      await deletePhoto(photoId);
-      const nextBoard = removePhotoFromBoard(board, photoId);
+      await deletePhoto(photo.id);
+      const nextBoard = removePhotoFromBoard(board, photo.id);
       setBoard(nextBoard);
 
       const nextItem = nextBoard.tiers.flatMap((tier) => tier.items).find((item) => item.id === selectedItem.id);
@@ -709,162 +730,129 @@ export default function App() {
 
       <header className="app-header">
         <div className="title-stack">
-          <span className="eyebrow">纯静态离线版 · GitHub Pages</span>
-          <h1>{board?.name ?? "排行表"}</h1>
+          <p className="eyebrow">纯静态离线版 · GITHUB PAGES</p>
+          <h1>排行表</h1>
           <div className="board-toolbar">
-            <label className="sr-only" htmlFor="board-select">
-              选择排行榜
-            </label>
             <select
-              id="board-select"
               className="board-select"
               value={activeBoardId ?? ""}
               onChange={(event) => void handleSelectBoard(Number(event.target.value))}
+              aria-label="选择排行榜"
             >
-              {boards.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
+              {boards.map((currentBoard) => (
+                <option key={currentBoard.id} value={currentBoard.id}>
+                  {currentBoard.name}
                 </option>
               ))}
             </select>
-            <button className="secondary-button" type="button" onClick={() => void handleAddBoard()}>
-              <Plus size={16} /> 新建排行榜
-            </button>
-            <button className="secondary-button" type="button" onClick={() => setShowBackupDrawer(true)}>
-              <Database size={16} /> 数据备份与迁移
-            </button>
+            {board ? (
+              <EditableBoardName
+                name={board.name}
+                onSave={async (name) => {
+                  await handleSaveBoardName(name);
+                }}
+              />
+            ) : null}
           </div>
         </div>
 
         <div className="header-actions">
-          {board ? (
-            <input
-              className="board-name-input"
-              defaultValue={board.name}
-              key={board.id}
-              maxLength={80}
-              onBlur={(event) => void handleSaveBoardName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void handleSaveBoardName(event.currentTarget.value);
-                  event.currentTarget.blur();
-                }
-              }}
-              title="修改当前排行榜名称"
-            />
-          ) : null}
-          <button className="secondary-button" type="button" onClick={() => void handleAddTier()}>
-            <Plus size={16} /> 新增档位
+          <button className="secondary-button" type="button" onClick={() => setShowBackupDrawer(true)}>
+            <Database size={17} aria-hidden="true" />
+            数据备份与迁移
           </button>
-          {boards.length > 1 ? (
-            <button className="danger-button" type="button" onClick={() => void handleDeleteBoard()} title="删除当前排行榜">
-              <Trash2 size={16} />
-            </button>
-          ) : null}
+          <button className="icon-button" type="button" onClick={() => void loadBoard()} title="刷新">
+            <RefreshCw size={18} aria-hidden="true" />
+          </button>
+          <button
+            className="icon-button danger"
+            type="button"
+            onClick={() => void handleDeleteBoard()}
+            disabled={boards.length <= 1}
+            title="删除当前排行榜"
+          >
+            <Trash2 size={18} aria-hidden="true" />
+          </button>
+          <button className="primary-button" type="button" onClick={() => void handleAddBoard()}>
+            <Plus size={18} aria-hidden="true" />
+            新排行榜
+          </button>
+          <button className="primary-button" type="button" onClick={() => void handleAddTier()}>
+            <Plus size={18} aria-hidden="true" />
+            新档位
+          </button>
         </div>
       </header>
 
       {error ? (
-        <aside className="banner error-banner">
-          <span>{error}</span>
-          <button type="button" onClick={() => setError(null)} aria-label="关闭提示">
-            <X size={16} />
+        <div className="error-banner" role="alert">
+          {error}
+          <button type="button" onClick={() => setError(null)} title="关闭">
+            <X size={16} aria-hidden="true" />
           </button>
-        </aside>
+        </div>
       ) : null}
 
-      <main className="board-layout">
+      <section className="board" aria-label="排行表">
         {board?.tiers.map((tier, index) => (
-          <section
+          <TierRow
             key={tier.id}
-            className="tier-row"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={() => void handleDrop(tier.id)}
-          >
-            <div className="tier-header" style={{ backgroundColor: tierPalette[index % tierPalette.length] }}>
-              <input
-                className="tier-name-input"
-                defaultValue={tier.name}
-                key={`${tier.id}-${tier.name}`}
-                maxLength={40}
-                onBlur={(event) => void handleSaveTier(tier.id, event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void handleSaveTier(tier.id, event.currentTarget.value);
-                    event.currentTarget.blur();
-                  }
-                }}
-              />
-              <button
-                className="tier-delete-button"
-                type="button"
-                onClick={() => void handleDeleteTier(tier.id)}
-                title="删除档位"
-                aria-label={`删除档位 ${tier.name}`}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-
-            <div className="tier-content">
-              <div className="tier-items">
-                {tier.items.map((item, itemIdx) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    currentTierId={tier.id}
-                    availableTiers={board.tiers}
-                    isFirst={itemIdx === 0}
-                    isLast={itemIdx === tier.items.length - 1}
-                    isDragging={draggingItemId === item.id}
-                    onDragStart={() => setDraggingItemId(item.id)}
-                    onDragEnd={() => setDraggingItemId(null)}
-                    onDropBefore={() => void handleDrop(tier.id, item.id)}
-                    onClick={() => setSelectedItemId(item.id)}
-                    onTouchShift={(direction) => void handleTouchShift(item.id, direction)}
-                    onTouchChangeTier={(targetTierId) => void handleTouchChangeTier(item.id, targetTierId)}
-                  />
-                ))}
-              </div>
-
-              <form
-                className="add-item-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleAddItem(tier.id);
-                }}
-              >
-                <input
-                  placeholder="添加项目..."
-                  value={newItemNames[tier.id] ?? ""}
-                  onChange={(event) =>
-                    setNewItemNames((current) => ({
-                      ...current,
-                      [tier.id]: event.target.value
-                    }))
-                  }
-                />
-                <button type="submit" disabled={!newItemNames[tier.id]?.trim()}>
-                  <Plus size={16} /> 添加
-                </button>
-              </form>
-            </div>
-          </section>
+            tier={tier}
+            accent={tierPalette[index % tierPalette.length]}
+            availableTiers={board.tiers.map((t) => ({ id: t.id, name: t.name }))}
+            newItemName={newItemNames[tier.id] ?? ""}
+            draggingItemId={draggingItemId}
+            onNewItemNameChange={(value) => setNewItemNames((current) => ({ ...current, [tier.id]: value }))}
+            onAddItem={() => void handleAddItem(tier.id)}
+            onDeleteTier={() => void handleDeleteTier(tier)}
+            onOpenItem={(item) => {
+              setSelectedItemId(item.id);
+              setSelectedPhotoIndex(0);
+            }}
+            onDeleteItem={(item) => void handleDeleteItem(item)}
+            onSaveTierName={async (name) => {
+              try {
+                setError(null);
+                await updateTier(tier.id, { name });
+                await loadBoard();
+              } catch (saveError) {
+                setError(saveError instanceof Error ? saveError.message : "保存档位名称失败。");
+              }
+            }}
+            onDragStart={(itemId) => setDraggingItemId(itemId)}
+            onDropOnTier={() => void handleMoveItem(tier.id)}
+            onDropOnItem={(itemId) => void handleMoveItem(tier.id, itemId)}
+            onMoveToTier={(itemId, targetTierId) => void handleMoveItemToTier(itemId, targetTierId)}
+            onMoveOrder={(itemId, direction) => void handleMoveItemOrder(itemId, direction)}
+          />
         ))}
-      </main>
+      </section>
 
       {selectedItem ? (
-        <ItemDetailModal
+        <PhotoModal
           item={selectedItem}
-          palette={tierPalette}
-          photoIndex={selectedPhotoIndex}
+          selectedPhotoIndex={selectedPhotoIndex}
           uploadStatus={uploadStatus}
           onClose={() => setSelectedItemId(null)}
-          onDelete={() => void handleDeleteItem(selectedItem.id)}
-          onDeletePhoto={(photoId) => void handleDeletePhoto(photoId)}
-          onSave={(name, description, coverPhotoId) => void handleSaveItemDetails(name, description, coverPhotoId)}
-          onSelectPhotoIndex={setSelectedPhotoIndex}
+          onSaveName={(name) => void handleSaveItemName(selectedItem, name)}
+          onSaveDescription={(description) => void handleSaveItemDescription(selectedItem, description)}
           onUpload={(files) => void handleUpload(files)}
+          onDeleteItem={() => void handleDeleteItem(selectedItem)}
+          onDeletePhoto={(photo) => void handleDeletePhoto(photo)}
+          onSetCoverPhoto={(photo) => void handleSetItemCover(selectedItem, photo)}
+          onPreviousPhoto={() =>
+            setSelectedPhotoIndex((currentIndex) =>
+              selectedItem.photos.length
+                ? (currentIndex - 1 + selectedItem.photos.length) % selectedItem.photos.length
+                : 0
+            )
+          }
+          onNextPhoto={() =>
+            setSelectedPhotoIndex((currentIndex) =>
+              selectedItem.photos.length ? (currentIndex + 1) % selectedItem.photos.length : 0
+            )
+          }
+          onSelectPhoto={setSelectedPhotoIndex}
         />
       ) : null}
 
@@ -874,25 +862,27 @@ export default function App() {
             <div className="drawer-header">
               <div>
                 <h2>数据备份与迁移</h2>
-                <p>静态离线版数据保存在当前浏览器的 IndexedDB 中。您可以导出 ZIP 备份或在其他设备上恢复。</p>
+                <p style={{ margin: "4px 0 0", color: "#69727d", fontSize: "13px" }}>
+                  纯静态离线版数据存储于当前浏览器的 IndexedDB 中。
+                </p>
               </div>
-              <button type="button" className="close-button" onClick={() => setShowBackupDrawer(false)}>
+              <button type="button" className="close-button" onClick={() => setShowBackupDrawer(false)} title="关闭">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="drawer-content">
+            <div className="drawer-section">
               {backupMsg ? (
                 <div className={`banner ${backupMsg.type === "success" ? "success-banner" : "error-banner"}`}>
                   <span>{backupMsg.text}</span>
                 </div>
               ) : null}
 
-              <div style={{ display: "grid", gap: "16px", marginTop: "12px" }}>
-                <div style={{ padding: "16px", border: "1px solid #e1e4e8", borderRadius: "8px", background: "#fff" }}>
-                  <h3 style={{ margin: "0 0 8px" }}>📦 导出备份包 (ZIP)</h3>
-                  <p style={{ margin: "0 0 12px", color: "#586069", fontSize: "14px" }}>
-                    将所有排行榜、档位、项目文字以及您在本地上传的所有图片/视频打包为压缩包下载。
+              <div style={{ display: "grid", gap: "16px", marginTop: "10px" }}>
+                <div style={{ padding: "16px", border: "1px solid #dce1e8", borderRadius: "8px", background: "#fbfcfd" }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "16px" }}>📦 导出备份包 (ZIP)</h3>
+                  <p style={{ margin: "0 0 12px", color: "#69727d", fontSize: "13px" }}>
+                    将所有排行榜、档位、项目描述以及您上传的全部照片/视频打包为压缩包下载。
                   </p>
                   <button
                     className="primary-button"
@@ -905,10 +895,10 @@ export default function App() {
                   </button>
                 </div>
 
-                <div style={{ padding: "16px", border: "1px solid #e1e4e8", borderRadius: "8px", background: "#fff" }}>
-                  <h3 style={{ margin: "0 0 8px" }}>📥 导入恢复数据</h3>
-                  <p style={{ margin: "0 0 12px", color: "#586069", fontSize: "14px" }}>
-                    选择之前导出的 ZIP 备份文件，系统将自动读取并恢复全部排行榜与照片。
+                <div style={{ padding: "16px", border: "1px solid #dce1e8", borderRadius: "8px", background: "#fbfcfd" }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "16px" }}>📥 导入恢复数据</h3>
+                  <p style={{ margin: "0 0 12px", color: "#69727d", fontSize: "13px" }}>
+                    选择之前导出的 ZIP 备份文件，系统将读取并在当前浏览器中恢复所有数据与照片。
                   </p>
                   <label className="secondary-button" style={{ display: "inline-flex", cursor: "pointer" }}>
                     <Upload size={16} /> 选择备份 ZIP 文件
@@ -930,274 +920,572 @@ export default function App() {
   );
 }
 
+interface TierRowProps {
+  tier: Tier;
+  accent: string;
+  availableTiers: Array<{ id: number; name: string }>;
+  newItemName: string;
+  draggingItemId: number | null;
+  onNewItemNameChange: (value: string) => void;
+  onAddItem: () => void;
+  onDeleteTier: () => void;
+  onOpenItem: (item: Item) => void;
+  onDeleteItem: (item: Item) => void;
+  onSaveTierName: (name: string) => Promise<void>;
+  onDragStart: (itemId: number) => void;
+  onDropOnTier: () => void;
+  onDropOnItem: (itemId: number) => void;
+  onMoveToTier: (itemId: number, targetTierId: number) => void;
+  onMoveOrder: (itemId: number, direction: "prev" | "next") => void;
+}
+
+function TierRow({
+  tier,
+  accent,
+  availableTiers,
+  newItemName,
+  draggingItemId,
+  onNewItemNameChange,
+  onAddItem,
+  onDeleteTier,
+  onOpenItem,
+  onDeleteItem,
+  onSaveTierName,
+  onDragStart,
+  onDropOnTier,
+  onDropOnItem,
+  onMoveToTier,
+  onMoveOrder
+}: TierRowProps) {
+  function handleRowDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    onDropOnTier();
+  }
+
+  function handleNewItemKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      onAddItem();
+    }
+  }
+
+  return (
+    <div className="tier-row" style={{ "--tier-accent": accent } as React.CSSProperties}>
+      <div className="tier-cell">
+        <EditableTierName name={tier.name} onSave={onSaveTierName} />
+        <button className="icon-button subtle" type="button" onClick={onDeleteTier} title="删除档位">
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="items-zone" onDragOver={(event) => event.preventDefault()} onDrop={handleRowDrop}>
+        {tier.items.map((item, index) => (
+          <ItemCard
+            key={item.id}
+            item={item}
+            availableTiers={availableTiers}
+            isFirst={index === 0}
+            isLast={index === tier.items.length - 1}
+            isDragging={draggingItemId === item.id}
+            onOpen={() => onOpenItem(item)}
+            onDelete={() => onDeleteItem(item)}
+            onDragStart={() => onDragStart(item.id)}
+            onDropBefore={() => onDropOnItem(item.id)}
+            onMoveToTier={(targetTierId) => onMoveToTier(item.id, targetTierId)}
+            onMoveOrder={(direction) => onMoveOrder(item.id, direction)}
+          />
+        ))}
+        <div className="new-item-form">
+          <input
+            value={newItemName}
+            onChange={(event) => onNewItemNameChange(event.target.value)}
+            onKeyDown={handleNewItemKeyDown}
+            placeholder="项目名称"
+            aria-label={`${tier.name} 新项目名称`}
+          />
+          <button className="icon-button" type="button" onClick={onAddItem} title="新增项目">
+            <Plus size={18} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface EditableTierNameProps {
+  name: string;
+  onSave: (name: string) => Promise<void>;
+}
+
+function EditableTierName({ name, onSave }: EditableTierNameProps) {
+  const [draft, setDraft] = useState(name);
+
+  useEffect(() => {
+    setDraft(name);
+  }, [name]);
+
+  async function commit() {
+    const normalized = draft.trim();
+    if (!normalized || normalized === name) {
+      setDraft(name);
+      return;
+    }
+    await onSave(normalized);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+    }
+    if (event.key === "Escape") {
+      setDraft(name);
+      event.currentTarget.blur();
+    }
+  }
+
+  return (
+    <input
+      className="tier-name-input"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={handleKeyDown}
+      aria-label="档位名称"
+    />
+  );
+}
+
+interface EditableBoardNameProps {
+  name: string;
+  onSave: (name: string) => Promise<void>;
+}
+
+function EditableBoardName({ name, onSave }: EditableBoardNameProps) {
+  const [draft, setDraft] = useState(name);
+
+  useEffect(() => {
+    setDraft(name);
+  }, [name]);
+
+  async function commit() {
+    const normalized = draft.trim();
+    if (!normalized || normalized === name) {
+      setDraft(name);
+      return;
+    }
+    await onSave(normalized);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+    }
+    if (event.key === "Escape") {
+      setDraft(name);
+      event.currentTarget.blur();
+    }
+  }
+
+  return (
+    <input
+      className="board-name-input"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={handleKeyDown}
+      aria-label="排行榜名称"
+    />
+  );
+}
+
 interface ItemCardProps {
   item: Item;
-  currentTierId: number;
-  availableTiers: Tier[];
+  availableTiers: Array<{ id: number; name: string }>;
   isFirst: boolean;
   isLast: boolean;
   isDragging: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
   onDragStart: () => void;
-  onDragEnd: () => void;
   onDropBefore: () => void;
-  onClick: () => void;
-  onTouchShift: (direction: "prev" | "next") => void;
-  onTouchChangeTier: (targetTierId: number) => void;
+  onMoveToTier: (targetTierId: number) => void;
+  onMoveOrder: (direction: "prev" | "next") => void;
 }
 
 function ItemCard({
   item,
-  currentTierId,
   availableTiers,
   isFirst,
   isLast,
   isDragging,
+  onOpen,
+  onDelete,
   onDragStart,
-  onDragEnd,
   onDropBefore,
-  onClick,
-  onTouchShift,
-  onTouchChangeTier
+  onMoveToTier,
+  onMoveOrder
 }: ItemCardProps) {
-  const cover = itemCoverPhoto(item);
+  const coverPhoto = coverPhotoForItem(item);
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    onDropBefore();
+  }
 
   return (
     <article
       className={`item-card${isDragging ? " dragging" : ""}`}
       draggable
+      onClick={onOpen}
       onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDropBefore();
+      onDrop={handleDrop}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          onOpen();
+        }
       }}
-      onClick={onClick}
     >
-      <div className="item-thumbnail">
-        {cover ? (
-          <img src={cover.url} alt={item.name} loading="lazy" />
-        ) : (
-          <div className="item-empty-cover" aria-hidden="true">
-            <ImageIcon size={22} />
-          </div>
-        )}
-      </div>
-
-      <div className="item-meta">
-        <span className="item-name">{item.name}</span>
-        {item.description ? <span className="item-desc-snippet">{item.description}</span> : null}
-      </div>
-
-      <div
-        className="item-touch-controls"
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="item-card-top">
+        <GripVertical size={16} aria-hidden="true" />
         <button
+          className="icon-button ghost danger"
           type="button"
-          className="touch-btn"
-          disabled={isFirst}
-          onClick={() => onTouchShift("prev")}
-          title="向左前移一位"
-          aria-label="前移"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          title="删除项目"
         >
-          ‹
-        </button>
-        <select
-          className="touch-tier-select"
-          value={currentTierId}
-          onChange={(e) => onTouchChangeTier(Number(e.target.value))}
-          title="选择档位"
-          aria-label="修改档位"
-        >
-          {availableTiers.map((tier) => (
-            <option key={tier.id} value={tier.id}>
-              {tier.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="touch-btn"
-          disabled={isLast}
-          onClick={() => onTouchShift("next")}
-          title="向右后移一位"
-          aria-label="后移"
-        >
-          ›
+          <Trash2 size={15} aria-hidden="true" />
         </button>
       </div>
 
-      <span className="item-drag-handle" title="按住拖拽排序">
-        <GripVertical size={14} />
-      </span>
+      {coverPhoto ? (
+        <div className="item-card-cover">
+          <img src={coverPhoto.url} alt={`${item.name} 封面`} loading="lazy" />
+        </div>
+      ) : null}
+
+      <strong>{item.name}</strong>
+      {item.description ? <p className="item-card-description">{item.description}</p> : null}
+
+      <div className="item-card-footer">
+        <span className="photo-count">
+          <Film size={14} aria-hidden="true" />
+          {item.photos.length}
+        </span>
+        <div className="item-sort-controls" onClick={(e) => e.stopPropagation()}>
+          <button
+            className="icon-button mini"
+            type="button"
+            disabled={isFirst}
+            onClick={() => onMoveOrder("prev")}
+            title="前移"
+          >
+            <ChevronLeft size={13} aria-hidden="true" />
+          </button>
+          <select
+            className="tier-badge-select"
+            value={item.tierId}
+            onChange={(e) => onMoveToTier(Number(e.target.value))}
+            title="移动到其他档位"
+          >
+            {availableTiers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="icon-button mini"
+            type="button"
+            disabled={isLast}
+            onClick={() => onMoveOrder("next")}
+            title="后移"
+          >
+            <ChevronRight size={13} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     </article>
   );
 }
 
-interface ItemDetailModalProps {
+interface PhotoModalProps {
   item: Item;
-  palette: string[];
-  photoIndex: number;
+  selectedPhotoIndex: number;
   uploadStatus: UploadStatus;
   onClose: () => void;
-  onDelete: () => void;
-  onDeletePhoto: (photoId: number) => void;
-  onSave: (name: string, description: string, coverPhotoId: number | null) => void;
-  onSelectPhotoIndex: (index: number) => void;
+  onSaveName: (name: string) => void;
+  onSaveDescription: (description: string) => void;
   onUpload: (files: FileList | null) => void;
+  onDeleteItem: () => void;
+  onDeletePhoto: (photo: Photo) => void;
+  onSetCoverPhoto: (photo: Photo) => void;
+  onPreviousPhoto: () => void;
+  onNextPhoto: () => void;
+  onSelectPhoto: (index: number) => void;
 }
 
-function ItemDetailModal({
-  item,
-  photoIndex,
-  uploadStatus,
-  onClose,
-  onDelete,
-  onDeletePhoto,
-  onSave,
-  onSelectPhotoIndex,
-  onUpload
-}: ItemDetailModalProps) {
-  const [name, setName] = useState(item.name);
-  const [description, setDescription] = useState(item.description);
-  const [coverPhotoId, setCoverPhotoId] = useState<number | null>(item.coverPhotoId);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+function MediaViewer({ media }: { media: Photo }) {
+  if (isImage(media)) {
+    return <img src={media.url} alt={media.originalName} />;
+  }
 
-  const activePhoto = item.photos[photoIndex];
-  const busy = uploadStatus.state === "uploading";
+  if (isVideo(media)) {
+    return <video src={media.url} controls playsInline preload="metadata" />;
+  }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="item-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-top">
-          <h2>项目详情</h2>
-          <button type="button" className="close-button" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
+    <div className="empty-viewer">
+      <Film size={34} aria-hidden="true" />
+      <span>暂不支持预览此文件</span>
+    </div>
+  );
+}
 
-        <div className="modal-form">
-          <label>
-            名称
-            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} />
-          </label>
+function MediaThumbnail({ media }: { media: Photo }) {
+  if (isImage(media)) {
+    return <img src={media.url} alt={media.originalName} />;
+  }
 
-          <label>
-            描述
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="添加详细描述..."
-            />
-          </label>
-
-          <div className="modal-photos-section">
-            <div className="photos-header">
-              <h3>媒体文件 ({item.photos.length})</h3>
-              <label className="secondary-button upload-btn">
-                <Upload size={16} /> 本地上传
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,video/*"
-                  style={{ display: "none" }}
-                  disabled={busy}
-                  onChange={(event) => {
-                    onUpload(event.target.files);
-                    if (event.target) event.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-
-            <UploadStatusPanel uploadStatus={uploadStatus} />
-
-            {item.photos.length ? (
-              <div className="modal-photo-viewer">
-                <div className="viewer-main">
-                  {activePhoto ? (
-                    isImageMedia(activePhoto) ? (
-                      <img src={activePhoto.url} alt={activePhoto.originalName} />
-                    ) : isVideoMedia(activePhoto) ? (
-                      <video src={activePhoto.url} controls />
-                    ) : (
-                      <div className="unsupported-media">不支持预览</div>
-                    )
-                  ) : null}
-
-                  {activePhoto ? (
-                    <div className="viewer-actions">
-                      <button
-                        type="button"
-                        className={coverPhotoId === activePhoto.id ? "primary-button" : "secondary-button"}
-                        onClick={() => setCoverPhotoId(activePhoto.id)}
-                      >
-                        {coverPhotoId === activePhoto.id ? "已是封面" : "设为封面"}
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() => onDeletePhoto(activePhoto.id)}
-                        title="删除此媒体"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="viewer-strip">
-                  {item.photos.map((photo, index) => (
-                    <button
-                      key={photo.id}
-                      type="button"
-                      className={`strip-thumb${index === photoIndex ? " active" : ""}`}
-                      onClick={() => onSelectPhotoIndex(index)}
-                    >
-                      {isImageMedia(photo) ? (
-                        <img src={photo.url} alt="" />
-                      ) : (
-                        <div className="video-thumb-icon">
-                          <Film size={20} />
-                        </div>
-                      )}
-                      {coverPhotoId === photo.id ? <span className="cover-badge">封面</span> : null}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="empty-photos">暂无媒体文件，点击上方“本地上传”添加</div>
-            )}
-          </div>
-        </div>
-
-        <div className="modal-footer">
-          <button type="button" className="danger-button" onClick={onDelete}>
-            <Trash2 size={16} /> 删除项目
-          </button>
-          <div className="modal-actions">
-            <button type="button" className="secondary-button" onClick={onClose}>
-              取消
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => {
-                onSave(name, description, coverPhotoId);
-                onClose();
-              }}
-            >
-              保存
-            </button>
-          </div>
-        </div>
+  if (isVideo(media)) {
+    return (
+      <div className="video-thumbnail">
+        <video src={media.url} muted playsInline preload="metadata" />
+        <Film size={20} aria-hidden="true" />
       </div>
+    );
+  }
+
+  return (
+    <div className="video-thumbnail">
+      <Film size={22} aria-hidden="true" />
+    </div>
+  );
+}
+
+function PhotoModal({
+  item,
+  selectedPhotoIndex,
+  uploadStatus,
+  onClose,
+  onSaveName,
+  onSaveDescription,
+  onUpload,
+  onDeleteItem,
+  onDeletePhoto,
+  onSetCoverPhoto,
+  onPreviousPhoto,
+  onNextPhoto,
+  onSelectPhoto
+}: PhotoModalProps) {
+  const [draftName, setDraftName] = useState(item.name);
+  const [draftDescription, setDraftDescription] = useState(item.description);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const activePhoto = item.photos[selectedPhotoIndex];
+  const busyPhotoUpload = uploadStatus.state === "uploading";
+  const nameChanged = draftName.trim() !== item.name;
+  const descriptionChanged = draftDescription.trim() !== item.description;
+
+  useEffect(() => {
+    setDraftName(item.name);
+    setDraftDescription(item.description);
+  }, [item.id, item.name, item.description]);
+
+  function handleNameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      onSaveName(draftName);
+    }
+
+    if (event.key === "Escape") {
+      setDraftName(item.name);
+      event.currentTarget.blur();
+    }
+  }
+
+  function handleDescriptionKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      onSaveDescription(draftDescription);
+    }
+
+    if (event.key === "Escape") {
+      setDraftDescription(item.description);
+      event.currentTarget.blur();
+    }
+  }
+
+  function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
+    event.preventDefault();
+    onUpload(event.target.files);
+    event.target.value = "";
+  }
+
+  function handleUploadClick(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!busyPhotoUpload) {
+      fileInputRef.current?.click();
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="photo-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="modal-header">
+          <div className="item-editor">
+            <div className="field-save-row">
+              <input
+                className="item-name-input"
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+                onKeyDown={handleNameKeyDown}
+                aria-label="项目名称"
+              />
+              <button
+                className="secondary-button field-save-button"
+                type="button"
+                onClick={() => onSaveName(draftName)}
+                disabled={!nameChanged}
+              >
+                <Save size={17} aria-hidden="true" />
+                保存名称
+              </button>
+            </div>
+            <div className="field-save-row description-row">
+              <textarea
+                className="item-description-input"
+                value={draftDescription}
+                onChange={(event) => setDraftDescription(event.target.value)}
+                onKeyDown={handleDescriptionKeyDown}
+                maxLength={2000}
+                placeholder="添加项目简介"
+                aria-label="项目简介"
+              />
+              <button
+                className="secondary-button field-save-button"
+                type="button"
+                onClick={() => onSaveDescription(draftDescription)}
+                disabled={!descriptionChanged}
+              >
+                <Save size={17} aria-hidden="true" />
+                保存简介
+              </button>
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={handleUploadClick}
+              disabled={busyPhotoUpload}
+            >
+              {busyPhotoUpload ? <LoaderCircle className="spin" size={18} aria-hidden="true" /> : <Upload size={18} aria-hidden="true" />}
+              {busyPhotoUpload ? "保存中" : "本地上传"}
+            </button>
+            <input
+              ref={fileInputRef}
+              className="file-input-hidden"
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={handleUploadChange}
+              disabled={busyPhotoUpload}
+            />
+            <button className="icon-button danger" type="button" onClick={onDeleteItem} title="删除项目">
+              <Trash2 size={18} aria-hidden="true" />
+            </button>
+            <button className="icon-button" type="button" onClick={onClose} title="关闭">
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        <UploadStatusPanel uploadStatus={uploadStatus} />
+
+        <div className="viewer">
+          {activePhoto ? (
+            <>
+              <button className="nav-button left" type="button" onClick={onPreviousPhoto} title="上一张">
+                <ChevronLeft size={24} aria-hidden="true" />
+              </button>
+              <MediaViewer media={activePhoto} />
+              <button className="nav-button right" type="button" onClick={onNextPhoto} title="下一张">
+                <ChevronRight size={24} aria-hidden="true" />
+              </button>
+            </>
+          ) : (
+            <div className="empty-viewer">
+              <ImageIcon size={34} aria-hidden="true" />
+              <span>暂无媒体文件</span>
+            </div>
+          )}
+        </div>
+
+        {activePhoto ? (
+          <div className="photo-meta">
+            <span>{activePhoto.originalName}</span>
+            <span>{fileSizeLabel(activePhoto.sizeBytes)}</span>
+          </div>
+        ) : null}
+
+        {item.photos.length ? (
+          <div className="thumbnail-strip" aria-label="媒体文件列表">
+            {item.photos.map((photo, index) => (
+              <button
+                key={photo.id}
+                className={`thumbnail${index === selectedPhotoIndex ? " active" : ""}${photo.id === item.coverPhotoId ? " cover" : ""}`}
+                type="button"
+                onClick={() => onSelectPhoto(index)}
+                title={photo.originalName}
+              >
+                <MediaThumbnail media={photo} />
+                {photo.id === item.coverPhotoId ? <strong className="cover-badge">封面</strong> : null}
+                {isImage(photo) && photo.id !== item.coverPhotoId ? (
+                  <span
+                    className="cover-action"
+                    role="button"
+                    tabIndex={0}
+                    title="设为封面"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSetCoverPhoto(photo);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.stopPropagation();
+                        onSetCoverPhoto(photo);
+                      }
+                    }}
+                  >
+                    封面
+                  </span>
+                ) : null}
+                <span
+                  className="delete-media-action"
+                  role="button"
+                  tabIndex={0}
+                  title="删除媒体文件"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeletePhoto(photo);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.stopPropagation();
+                      onDeletePhoto(photo);
+                    }
+                  }}
+                >
+                  <X size={13} aria-hidden="true" />
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }
