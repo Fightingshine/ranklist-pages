@@ -8,6 +8,7 @@ export interface UploadProgress {
 }
 
 const objectUrlCache = new Map<number, string>();
+export const STATIC_ASSET_VERSION = "20261004v2";
 
 export function getPhotoDisplayUrl(photo: { id: number; blob?: Blob; staticUrl?: string }): string {
   if (photo.blob) {
@@ -19,7 +20,8 @@ export function getPhotoDisplayUrl(photo: { id: number; blob?: Blob; staticUrl?:
 
   if (photo.staticUrl) {
     const cleanPath = photo.staticUrl.replace(/^\.?\//, "");
-    return `./${cleanPath}`;
+    const separator = cleanPath.includes("?") ? "&" : "?";
+    return `./${cleanPath}${separator}v=${STATIC_ASSET_VERSION}`;
   }
 
   return "";
@@ -553,4 +555,86 @@ export async function deletePhoto(photoId: number): Promise<void> {
       tx.objectStore("items").put(item);
     }
   });
+}
+
+export async function rotatePhoto(photoId: number, clockwise = true): Promise<Photo> {
+  const db = await openDatabase();
+  const rawPhoto = await new Promise<any>((resolve, reject) => {
+    const tx = db.transaction("photos", "readonly");
+    const req = tx.objectStore("photos").get(photoId);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+
+  if (!rawPhoto) {
+    throw new Error(`Photo with id ${photoId} not found`);
+  }
+
+  let sourceBlob: Blob;
+  if (rawPhoto.blob) {
+    sourceBlob = rawPhoto.blob;
+  } else if (rawPhoto.staticUrl) {
+    const url = getPhotoDisplayUrl(rawPhoto);
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      throw new Error(`Failed to load photo image from ${url}`);
+    }
+    sourceBlob = await resp.blob();
+  } else {
+    throw new Error("No image data available to rotate");
+  }
+
+  const imageBitmap = await createImageBitmap(sourceBlob);
+  const { width, height } = imageBitmap;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = height;
+  canvas.height = width;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas 2D context not available");
+  }
+
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  const angle = clockwise ? Math.PI / 2 : -Math.PI / 2;
+  ctx.rotate(angle);
+  ctx.drawImage(imageBitmap, -width / 2, -height / 2);
+
+  const rotatedBlob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => {
+        if (b) resolve(b);
+        else reject(new Error("Failed to export rotated image"));
+      },
+      "image/webp",
+      0.9
+    );
+  });
+
+  revokePhotoUrl(photoId);
+
+  const updatedRecord = {
+    ...rawPhoto,
+    blob: rotatedBlob,
+    mimeType: "image/webp",
+    sizeBytes: rotatedBlob.size,
+    staticUrl: undefined
+  };
+
+  await withTransaction(["photos"], "readwrite", (tx) => {
+    tx.objectStore("photos").put(updatedRecord);
+  });
+
+  return {
+    id: updatedRecord.id,
+    itemId: updatedRecord.itemId,
+    filename: updatedRecord.filename,
+    originalName: updatedRecord.originalName,
+    mimeType: updatedRecord.mimeType,
+    sizeBytes: updatedRecord.sizeBytes,
+    sortOrder: updatedRecord.sortOrder,
+    url: getPhotoDisplayUrl(updatedRecord),
+    blob: rotatedBlob,
+    createdAt: updatedRecord.createdAt
+  };
 }

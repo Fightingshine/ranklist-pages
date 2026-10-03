@@ -19,6 +19,8 @@ import {
   LoaderCircle,
   Plus,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Save,
   Trash2,
   Upload,
@@ -35,7 +37,9 @@ import {
   fetchBoard,
   fetchBoardById,
   fetchBoards,
+  fetchItemById,
   reorderItems,
+  rotatePhoto,
   updateBoard,
   updateItem,
   updateTier,
@@ -678,6 +682,26 @@ export default function App() {
     }
   }
 
+  async function handleRotatePhoto(photo: Photo, clockwise: boolean) {
+    try {
+      await rotatePhoto(photo.id, clockwise);
+      const updatedItem = await fetchItemById(photo.itemId);
+      setBoard((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          tiers: prev.tiers.map((t) => ({
+            ...t,
+            items: t.items.map((i) => (i.id === updatedItem.id ? updatedItem : i))
+          }))
+        };
+      });
+    } catch (err) {
+      console.error("Failed to rotate photo:", err);
+      setError(err instanceof Error ? err.message : "旋转照片失败。");
+    }
+  }
+
   async function handleExportBackup() {
     try {
       setBackupLoading(true);
@@ -840,6 +864,7 @@ export default function App() {
           onDeleteItem={() => void handleDeleteItem(selectedItem)}
           onDeletePhoto={(photo) => void handleDeletePhoto(photo)}
           onSetCoverPhoto={(photo) => void handleSetItemCover(selectedItem, photo)}
+          onRotatePhoto={(photo, clockwise) => handleRotatePhoto(photo, clockwise)}
           onPreviousPhoto={() =>
             setSelectedPhotoIndex((currentIndex) =>
               selectedItem.photos.length
@@ -1223,6 +1248,7 @@ interface PhotoModalProps {
   onDeleteItem: () => void;
   onDeletePhoto: (photo: Photo) => void;
   onSetCoverPhoto: (photo: Photo) => void;
+  onRotatePhoto: (photo: Photo, clockwise: boolean) => Promise<void>;
   onPreviousPhoto: () => void;
   onNextPhoto: () => void;
   onSelectPhoto: (index: number) => void;
@@ -1277,17 +1303,29 @@ function PhotoModal({
   onDeleteItem,
   onDeletePhoto,
   onSetCoverPhoto,
+  onRotatePhoto,
   onPreviousPhoto,
   onNextPhoto,
   onSelectPhoto
 }: PhotoModalProps) {
   const [draftName, setDraftName] = useState(item.name);
   const [draftDescription, setDraftDescription] = useState(item.description);
+  const [isRotating, setIsRotating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activePhoto = item.photos[selectedPhotoIndex];
   const busyPhotoUpload = uploadStatus.state === "uploading";
   const nameChanged = draftName.trim() !== item.name;
   const descriptionChanged = draftDescription.trim() !== item.description;
+
+  async function handleRotate(clockwise: boolean) {
+    if (!activePhoto || isRotating) return;
+    setIsRotating(true);
+    try {
+      await onRotatePhoto(activePhoto, clockwise);
+    } finally {
+      setIsRotating(false);
+    }
+  }
 
   useEffect(() => {
     setDraftName(item.name);
@@ -1426,8 +1464,34 @@ function PhotoModal({
 
         {activePhoto ? (
           <div className="photo-meta">
-            <span>{activePhoto.originalName}</span>
-            <span>{fileSizeLabel(activePhoto.sizeBytes)}</span>
+            <span title={activePhoto.originalName}>{activePhoto.originalName}</span>
+            <div className="photo-meta-actions">
+              {isImage(activePhoto) ? (
+                <>
+                  <button
+                    className="meta-action-button"
+                    type="button"
+                    onClick={() => void handleRotate(false)}
+                    title="逆时针旋转 90°"
+                    disabled={isRotating}
+                  >
+                    <RotateCcw size={13} aria-hidden="true" />
+                    <span>左转 90°</span>
+                  </button>
+                  <button
+                    className="meta-action-button"
+                    type="button"
+                    onClick={() => void handleRotate(true)}
+                    title="顺时针旋转 90°"
+                    disabled={isRotating}
+                  >
+                    <RotateCw size={13} aria-hidden="true" />
+                    <span>右转 90°</span>
+                  </button>
+                </>
+              ) : null}
+              <span className="photo-size-badge">{fileSizeLabel(activePhoto.sizeBytes)}</span>
+            </div>
           </div>
         ) : null}
 
