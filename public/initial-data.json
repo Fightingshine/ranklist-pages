@@ -1,0 +1,328 @@
+{
+  "boards": [
+    {
+      "id": 1,
+      "name": "山山山ranklist",
+      "sortOrder": 0
+    },
+    {
+      "id": 3,
+      "name": "东北菜",
+      "sortOrder": 1
+    }
+  ],
+  "tiers": [
+    {
+      "id": 1,
+      "boardId": 1,
+      "name": "S",
+      "sortOrder": 0
+    },
+    {
+      "id": 9,
+      "boardId": 3,
+      "name": "S",
+      "sortOrder": 0
+    },
+    {
+      "id": 2,
+      "boardId": 1,
+      "name": "A",
+      "sortOrder": 1
+    },
+    {
+      "id": 10,
+      "boardId": 3,
+      "name": "A",
+      "sortOrder": 1
+    },
+    {
+      "id": 3,
+      "boardId": 1,
+      "name": "B",
+      "sortOrder": 2
+    },
+    {
+      "id": 11,
+      "boardId": 3,
+      "name": "B",
+      "sortOrder": 2
+    },
+    {
+      "id": 4,
+      "boardId": 1,
+      "name": "C",
+      "sortOrder": 3
+    },
+    {
+      "id": 12,
+      "boardId": 3,
+      "name": "C",
+      "sortOrder": 3
+    },
+    {
+      "id": 13,
+      "boardId": 1,
+      "name": "D",
+      "sortOrder": 4
+    }
+  ],
+  "items": [
+    {
+      "id": 3,
+      "tierId": 1,
+      "name": "三峡之巅",
+      "description": "风景奇绝，难度也高",
+      "coverPhotoId": 32,
+      "sortOrder": 0,
+      "photos": [
+        {
+          "id": 32,
+          "itemId": 3,
+          "filename": "item-3.webp",
+          "originalName": "IMG_3959.JPG",
+          "mimeType": "image/webp",
+          "sizeBytes": 33646,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-3.webp"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "tierId": 2,
+      "name": "武陵山大裂谷",
+      "description": "风景很好，可惜路程较短，816没啥意思",
+      "coverPhotoId": 187,
+      "sortOrder": 0,
+      "photos": [
+        {
+          "id": 187,
+          "itemId": 6,
+          "filename": "item-6.webp",
+          "originalName": "IMG_3963.JPG",
+          "mimeType": "image/webp",
+          "sizeBytes": 49282,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-6.webp"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "tierId": 13,
+      "name": "龙脊山",
+      "description": "4月全是虫，山不高，没啥风景",
+      "coverPhotoId": 402,
+      "sortOrder": 0,
+      "photos": [
+        {
+          "id": 402,
+          "itemId": 7,
+          "filename": "item-7.webp",
+          "originalName": "IMG_20260419_114001.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 137672,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-7.webp"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "tierId": 3,
+      "name": "缙云山",
+      "description": "及格水平，没啥风景",
+      "coverPhotoId": 420,
+      "sortOrder": 0,
+      "photos": [
+        {
+          "id": 420,
+          "itemId": 8,
+          "filename": "item-8.webp",
+          "originalName": "IMG_20260321_111033.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 62110,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-8.webp"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "tierId": 4,
+      "name": "中梁山",
+      "description": "全是野路，沙石路非常滑",
+      "coverPhotoId": 593,
+      "sortOrder": 0,
+      "photos": [
+        {
+          "id": 593,
+          "itemId": 12,
+          "filename": "item-12.webp",
+          "originalName": "IMG_20260425_120913.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 33964,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-12.webp"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "tierId": 9,
+      "name": "肉丝蒜薹",
+      "description": "",
+      "coverPhotoId": null,
+      "sortOrder": 0,
+      "photos": []
+    },
+    {
+      "id": 4,
+      "tierId": 1,
+      "name": "金佛山",
+      "description": "景好，难度也高，非常具有挑战性",
+      "coverPhotoId": 84,
+      "sortOrder": 1,
+      "photos": [
+        {
+          "id": 84,
+          "itemId": 4,
+          "filename": "item-4.webp",
+          "originalName": "IMG_20260405_091953.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 156344,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-4.webp"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "tierId": 3,
+      "name": "歌乐山",
+      "description": "矿坑好看",
+      "coverPhotoId": 497,
+      "sortOrder": 1,
+      "photos": [
+        {
+          "id": 497,
+          "itemId": 9,
+          "filename": "item-9.webp",
+          "originalName": "IMG_20260403_101930.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 47962,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-9.webp"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "tierId": 2,
+      "name": "铁山坪",
+      "description": "景区开发的不错，基本都是人造景，最后步道吹江风看江景很惬意",
+      "coverPhotoId": 535,
+      "sortOrder": 1,
+      "photos": [
+        {
+          "id": 535,
+          "itemId": 10,
+          "filename": "item-10.webp",
+          "originalName": "IMG_20260503_122409.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 68146,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-10.webp"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "tierId": 9,
+      "name": "红烧日本豆腐",
+      "description": "",
+      "coverPhotoId": null,
+      "sortOrder": 1,
+      "photos": []
+    },
+    {
+      "id": 5,
+      "tierId": 1,
+      "name": "金刀峡",
+      "description": "风景很好，适合夏天去，偏岩古镇豆花饭便宜又好吃",
+      "coverPhotoId": 122,
+      "sortOrder": 2,
+      "photos": [
+        {
+          "id": 122,
+          "itemId": 5,
+          "filename": "item-5.webp",
+          "originalName": "IMG_20260328_095204.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 67860,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-5.webp"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "tierId": 2,
+      "name": "玉峰山",
+      "description": "前面暴汗，后面全是平路，最后步道视野开阔，风景不错",
+      "coverPhotoId": 585,
+      "sortOrder": 2,
+      "photos": [
+        {
+          "id": 585,
+          "itemId": 11,
+          "filename": "item-11.webp",
+          "originalName": "IMG_20260412_154326.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 62140,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-11.webp"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "tierId": 9,
+      "name": "皮蛋豆腐",
+      "description": "",
+      "coverPhotoId": null,
+      "sortOrder": 2,
+      "photos": []
+    },
+    {
+      "id": 17,
+      "tierId": 9,
+      "name": "大窑",
+      "description": "",
+      "coverPhotoId": null,
+      "sortOrder": 3,
+      "photos": []
+    },
+    {
+      "id": 20,
+      "tierId": 2,
+      "name": "照母山",
+      "description": "风景挺不错的，总体面积也比较大",
+      "coverPhotoId": 613,
+      "sortOrder": 3,
+      "photos": [
+        {
+          "id": 613,
+          "itemId": 20,
+          "filename": "item-20.webp",
+          "originalName": "IMG_20260510_111853.jpg",
+          "mimeType": "image/webp",
+          "sizeBytes": 76230,
+          "sortOrder": 0,
+          "staticUrl": "covers/item-20.webp"
+        }
+      ]
+    }
+  ]
+}
